@@ -1,1 +1,79 @@
+// Custom logger middleware
 
+module.exports = (req, res, next) => {
+  const timestamp = new Date().toISOString();
+  console.log(`[${timestamp}] ${req.method} ${req.originalUrl}`);
+  next();
+};
+// API key authentication middleware
+
+module.exports = (req, res, next) => {
+  const apiKey = req.headers['x-api-key'];
+  if (!process.env.API_KEY) {
+    return res.status(500).json({ error: 'API_KEY not configured on server' });
+  }
+  if (apiKey !== process.env.API_KEY) {
+    return res.status(401).json({ error: 'Unauthorized: Invalid API Key' });
+  }
+  next();
+};
+// Validation middleware for product creation/update
+
+const { ValidationError } = require('../errors/customErrors');
+
+function validateProduct(req, res, next) {
+  const { name, description, price, category, inStock } = req.body;
+  if (
+    typeof name !== 'string' ||
+    typeof description !== 'string' ||
+    typeof price !== 'number' ||
+    typeof category !== 'string' ||
+    typeof inStock !== 'boolean'
+  ) {
+    return next(new ValidationError('Invalid product fields'));
+  }
+  next();
+}
+
+function validateProductPatch(req, res, next) {
+  const { name, description, price, category, inStock } = req.body;
+  if (
+    (name && typeof name !== 'string') ||
+    (description && typeof description !== 'string') ||
+    (price && typeof price !== 'number') ||
+    (category && typeof category !== 'string') ||
+    (inStock && typeof inStock !== 'boolean')
+
+  ) {
+    return next(new ValidationError('Invalid product fields'));
+  }
+  next();
+}
+
+module.exports = { validateProduct, validateProductPatch };
+// Global error handler
+
+module.exports = (err, req, res, next) => {
+  const status = err.status || 500;
+  const message = err.message || 'Internal Server Error';
+  res.status(status).json({ error: message });
+};
+// Custom error classes
+
+class NotFoundError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = 'NotFoundError';
+    this.status = 404;
+  }
+}
+
+class ValidationError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = 'ValidationError';
+    this.status = 400;
+  }
+}
+
+module.exports = { NotFoundError, ValidationError };
