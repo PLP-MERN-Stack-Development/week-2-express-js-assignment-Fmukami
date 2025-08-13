@@ -1,1 +1,100 @@
+const express = require('express');
+const { v4: uuidv4 } = require('uuid');
+const { validateProduct, validateProductPatch } = require('../middleware/validation');
+const { NotFoundError } = require('../errors/customErrors');
+const router = express.Router();
 
+let products = []; // In-memory store; replace with DB in production
+
+// Filtering, pagination, search
+router.get('/', (req, res, next) => {
+  try {
+    let { category, page = 1, limit = 10, search } = req.query;
+    let filtered = products;
+
+    if (category) filtered = filtered.filter(p => p.category === category);
+    if (search) filtered = filtered.filter(p => p.name.toLowerCase().includes(search.toLowerCase()));
+
+    const total = filtered.length;
+    const start = (page - 1) * limit;
+    const paginated = filtered.slice(start, start + Number(limit));
+    res.json({ total, page: Number(page), limit: Number(limit), products: paginated });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Search by name
+router.get('/search', (req, res, next) => {
+  try {
+    const { name } = req.query;
+    if (!name) return res.status(400).json({ error: 'Missing name query parameter' });
+    const results = products.filter(p => p.name.toLowerCase().includes(name.toLowerCase()));
+    res.json(results);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Statistics: count by category
+router.get('/stats', (req, res, next) => {
+  try {
+    const stats = {};
+    products.forEach(p => {
+      stats[p.category] = (stats[p.category] || 0) + 1;
+    });
+    res.json(stats);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Get all products (already covered by / above)
+// Get product by ID
+router.get('/:id', (req, res, next) => {
+  try {
+    const product = products.find(p => p.id === req.params.id);
+    if (!product) throw new NotFoundError('Product not found');
+    res.json(product);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Create product
+router.post('/', validateProduct, (req, res, next) => {
+  try {
+    const { name, description, price, category, inStock } = req.body;
+    const product = { id: uuidv4(), name, description, price, category, inStock };
+    products.push(product);
+    res.status(201).json(product);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Update product
+router.put('/:id', validateProductPatch, (req, res, next) => {
+  try {
+    const idx = products.findIndex(p => p.id === req.params.id);
+    if (idx === -1) throw new NotFoundError('Product not found');
+    products[idx] = { ...products[idx], ...req.body };
+    res.json(products[idx]);
+  } catch (err) {
+    next(err);
+  }
+});
+
+// Delete product
+router.delete('/:id', (req, res, next) => {
+  try {
+    const idx = products.findIndex(p => p.id === req.params.id);
+    if (idx === -1) throw new NotFoundError('Product not found');
+    const deleted = products.splice(idx, 1);
+    res.json(deleted[0]);
+  } catch (err) {
+    next(err);
+  }
+});
+
+module.exports = router;
